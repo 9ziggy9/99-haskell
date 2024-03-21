@@ -12,5 +12,23 @@ instance Palindromic [Char] where
 instance Palindromic Integer where
   isPalindrome n = isPalindrome (show n)
 
-main :: IO ()
-main = putStrLn "Hello, world!"
+data NestedList a = Elem a | List [NestedList a]
+
+flatten' :: NestedList a -> [a]
+flatten' (Elem x)      = [x]
+flatten' (List [])     = []
+flatten' (List (x:xs)) = flatten' x ++ flatten' (List xs)
+
+compress :: (Eq a) => [a] -> [a]
+compress xs = aux xs []
+  where aux [ ] acc = acc
+        aux [x] acc = (acc ++ [x])
+        aux (x:xs@(h:_)) acc
+          | x == h       = aux xs acc
+          | otherwise    = aux xs (acc ++ [x])
+
+pack :: String -> [[Char]]
+pack [] = []
+pack (x:xs) = (x:ys) : pack zs
+  where
+    (ys, zs) = span (==x) xs
