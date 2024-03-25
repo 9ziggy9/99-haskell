@@ -1,6 +1,6 @@
 # Project settings
-EXECUTABLE = hanoi
-SOURCE = hanoi.hs
+EXECUTABLE = particles
+SOURCE = particles.hs
 BUILD_DIR = build
 
 # Compiler settings
@@ -24,4 +24,4 @@ run: $(EXECUTABLE)
 clean:
 	rm -rf $(BUILD_DIR) $(EXECUTABLE)
 
-.PHONY: all run clean
+PHONY: all run clean
