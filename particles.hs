@@ -49,15 +49,47 @@ pictureCheckerboard clr1 clr2 size (maxX, maxY) =
     lastX = maxX / size
     lastY = maxY / size
 
+collisionXBound :: Float -> Float -> Float -> Bool
+collisionXBound x rad maxX =
+  x > (maxX / 2 - rad) || x < (rad - maxX / 2)
+
+collisionYBound :: Float -> Float -> Float -> Bool
+collisionYBound y rad maxY =
+  y > (maxY / 2 - rad) || y < (rad - maxY / 2)
+
 main :: IO ()
-main = display window bgVoid (pictures [bg, particle1])
+main = simulate window bgVoid 60 state0 model step
   where
-    prSize :: Float = 10
+    dt     :: Float = 1
+    grav   :: Float = -1
+    loss   :: Float = 0.8
+    prRad  :: Float = 10
     sqSize :: Float = 20
-    (maxX, maxY) :: (Int, Int) = (620, 480)
-    window = InWindow "haskell-particles" (maxX, maxY) (0, 0)
+    (maxX, maxY) :: (Float, Float) = (620, 480)
+    window = InWindow "haskell-particles" (floor maxX, floor maxY) (0, 0)
+
     bgVoid = appColor "base03"
+
     bg = translate (sqSize/2) (sqSize/2) $
       pictureCheckerboard (appColor "base00") (appColor "base01")
-      sqSize (fromIntegral maxX, fromIntegral maxY)
-    particle1 = pictureCircle (appColor "red") prSize
+      sqSize (maxX, maxY)
+
+    state0 :: (Float, Float, Float, Float)
+    state0 = (0, 0, 5, 0)
+
+    step _ _ state = updatePosition $ updateVelocity state
+    updateVelocity (x, y, dx_dt, dy_dt) =
+      let dx = dx_dt * dt
+          dy = dy_dt * dt
+          vx = if collisionXBound (x + dx) prRad maxX then -(dx_dt * loss) else dx_dt
+          vy = if collisionYBound (y + dy) prRad maxY then -(dy_dt * loss) else dy_dt + grav * dt
+      in (x, y, vx, vy)
+    updatePosition (x, y, dx_dt, dy_dt) =
+      let dx = dx_dt * dt
+          dy = dy_dt * dt
+      in (x + dx, y + dy, dx_dt, dy_dt)
+
+    model (x, y, _, _) = pictures [
+      bg,
+      translate x y $ pictureCircle (appColor "blue") prRad
+      ]
