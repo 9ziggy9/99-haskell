@@ -49,6 +49,50 @@ pictureCheckerboard clr1 clr2 size (maxX, maxY) =
     lastX = maxX / size
     lastY = maxY / size
 
+-- generalized coordinates
+data Vec2 = Vec2 Float Float deriving (Show)
+
+-- phase used to invoke idea of "phase space"
+-- this data type holds a particles position and velocities
+data Phase = Phase Vec2 Vec2 deriving (Show)
+
+data ParticleState = ParticleState { phase  :: Phase
+                                   , radius :: Float
+                                   , mass   :: Float
+                                   , clr    :: Color } deriving (Show)
+
+updateVelocity settings particle =
+  let dt :: Float = time settings in
+  let g  :: Float = grav settings in
+  let r  :: Float = radius particle in
+  let Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle in
+  let dx = dx_dt * dt
+      dy = dy_dt * dt
+      vx = if collisionXBound (x + dx) r (maxX settings)
+            then -(dx_dt * (lossX settings)) else dx_dt
+      vy = if collisionYBound (y + dy) r (maxY settings)
+            then -(dy_dt * (lossY settings)) else dy_dt + g * dt
+  in particle { phase = Phase (Vec2 x y) (Vec2 vx vy) }
+
+updatePosition settings particle =
+  let dt :: Float = time settings in
+  let Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle in
+  let dx = dx_dt * dt
+      dy = dy_dt * dt
+  in particle { phase = Phase
+                (Vec2 (x + dx) (y + dy))
+                (Vec2 dx_dt dy_dt)
+              }
+
+
+data SimSettings = SimSettings { time   :: Float
+                               , grav   :: Float
+                               , lossY  :: Float
+                               , lossX  :: Float
+                               , sizeSq :: Float
+                               , maxX   :: Float
+                               , maxY   :: Float } deriving (Show)
+
 collisionXBound :: Float -> Float -> Float -> Bool
 collisionXBound x rad maxX =
   x > (maxX / 2 - rad) || x < (rad - maxX / 2)
@@ -58,38 +102,49 @@ collisionYBound y rad maxY =
   y > (maxY / 2 - rad) || y < (rad - maxY / 2)
 
 main :: IO ()
-main = simulate window bgVoid 60 state0 model step
+main = simulate window bgVoid 60 systemState0 model systemState
   where
-    dt     :: Float = 1
-    grav   :: Float = -1
-    loss   :: Float = 0.8
-    prRad  :: Float = 10
-    sqSize :: Float = 20
-    (maxX, maxY) :: (Float, Float) = (620, 480)
-    window = InWindow "haskell-particles" (floor maxX, floor maxY) (0, 0)
+    settings = SimSettings { time   = 1
+                           , grav   = -1
+                           , lossY  = 0.8
+                           , lossX  = 0.6
+                           , sizeSq = 20
+                           , maxX   = 620
+                           , maxY   = 480 }
+
+    window = InWindow "haskell-particles" (floor (maxX settings),
+                                           floor (maxY settings)) (0, 0)
 
     bgVoid = appColor "base03"
 
-    bg = translate (sqSize/2) (sqSize/2) $
+    bg = translate (sizeSq settings / 2) (sizeSq settings / 2) $
       pictureCheckerboard (appColor "base00") (appColor "base01")
-      sqSize (maxX, maxY)
+      (sizeSq settings) (maxX settings, maxY settings)
 
-    state0 :: (Float, Float, Float, Float)
-    state0 = (0, 0, 5, 0)
-
-    step _ _ state = updatePosition $ updateVelocity state
-    updateVelocity (x, y, dx_dt, dy_dt) =
-      let dx = dx_dt * dt
-          dy = dy_dt * dt
-          vx = if collisionXBound (x + dx) prRad maxX then -(dx_dt * loss) else dx_dt
-          vy = if collisionYBound (y + dy) prRad maxY then -(dy_dt * loss) else dy_dt + grav * dt
-      in (x, y, vx, vy)
-    updatePosition (x, y, dx_dt, dy_dt) =
-      let dx = dx_dt * dt
-          dy = dy_dt * dt
-      in (x + dx, y + dy, dx_dt, dy_dt)
-
-    model (x, y, _, _) = pictures [
-      bg,
-      translate x y $ pictureCircle (appColor "blue") prRad
+    systemState0 :: [ParticleState]
+    systemState0 = [
+      ParticleState { phase = Phase (Vec2 0 0) (Vec2 5 0)
+                    , radius = 10
+                    , mass = 1
+                    , clr = appColor "red" },
+      ParticleState { phase = Phase (Vec2 0 20) (Vec2 3 10)
+                    , radius = 15
+                    , mass = 1
+                    , clr = appColor "green" },
+      ParticleState { phase = Phase (Vec2 (-10) 5) (Vec2 (-5) 5)
+                    , radius = 25
+                    , mass = 1
+                    , clr = appColor "blue" }
       ]
+
+    systemState _ _ substates =
+      map (update settings) substates
+      where update s = updatePosition s . updateVelocity s
+
+    transition particle =
+      let r :: Float = radius particle in
+      let c :: Color = clr particle in
+      let Phase (Vec2 x y) _ = phase particle
+      in translate x y $ pictureCircle c r
+
+    model substates = pictures $ bg : map transition substates
