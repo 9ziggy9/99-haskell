@@ -1,4 +1,8 @@
 import Graphics.Gloss
+import System.Random (randomR, getStdGen, StdGen, Random)
+
+rangeRand :: (Random a) => (a, a) -> StdGen -> (a, StdGen)
+rangeRand range = randomR range
 
 appColorPalette :: [(String, Color)]
 appColorPalette =
@@ -61,30 +65,6 @@ data ParticleState = ParticleState { phase  :: Phase
                                    , mass   :: Float
                                    , clr    :: Color } deriving (Show)
 
-updateVelocity settings particle =
-  let dt :: Float = time settings in
-  let g  :: Float = grav settings in
-  let r  :: Float = radius particle in
-  let Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle in
-  let dx = dx_dt * dt
-      dy = dy_dt * dt
-      vx = if collisionXBound (x + dx) r (maxX settings)
-            then -(dx_dt * (lossX settings)) else dx_dt
-      vy = if collisionYBound (y + dy) r (maxY settings)
-            then -(dy_dt * (lossY settings)) else dy_dt + g * dt
-  in particle { phase = Phase (Vec2 x y) (Vec2 vx vy) }
-
-updatePosition settings particle =
-  let dt :: Float = time settings in
-  let Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle in
-  let dx = dx_dt * dt
-      dy = dy_dt * dt
-  in particle { phase = Phase
-                (Vec2 (x + dx) (y + dy))
-                (Vec2 dx_dt dy_dt)
-              }
-
-
 data SimSettings = SimSettings { time   :: Float
                                , grav   :: Float
                                , lossY  :: Float
@@ -92,6 +72,30 @@ data SimSettings = SimSettings { time   :: Float
                                , sizeSq :: Float
                                , maxX   :: Float
                                , maxY   :: Float } deriving (Show)
+
+updateVelocity :: SimSettings -> ParticleState -> ParticleState
+updateVelocity settings particle =
+  let dx = dx_dt * dt
+      dy = dy_dt * dt
+      vx = if collisionXBound (x + dx) r (maxX settings)
+            then -(dx_dt * (lossX settings)) else dx_dt
+      vy = if collisionYBound (y + dy) r (maxY settings)
+            then -(dy_dt * (lossY settings)) else dy_dt + g * dt
+  in particle { phase = Phase (Vec2 x y) (Vec2 vx vy) }
+  where
+    Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle
+    dt :: Float = time settings
+    g  :: Float = grav settings
+    r  :: Float = radius particle
+
+updatePosition :: SimSettings -> ParticleState -> ParticleState
+updatePosition settings particle =
+  let dx = dx_dt * dt
+      dy = dy_dt * dt
+  in particle { phase = Phase (Vec2 (x + dx) (y + dy)) (Vec2 dx_dt dy_dt) }
+  where
+    dt :: Float = time settings
+    Phase (Vec2 x y) (Vec2 dx_dt dy_dt) = phase particle
 
 collisionXBound :: Float -> Float -> Float -> Bool
 collisionXBound x rad maxX =
@@ -141,10 +145,9 @@ main = simulate window bgVoid 60 systemState0 model systemState
       map (update settings) substates
       where update s = updatePosition s . updateVelocity s
 
-    transition particle =
-      let r :: Float = radius particle in
-      let c :: Color = clr particle in
-      let Phase (Vec2 x y) _ = phase particle
-      in translate x y $ pictureCircle c r
+    transition particle = translate x y $ pictureCircle c r
+      where r :: Float = radius particle
+            c :: Color = clr particle
+            Phase (Vec2 x y) _ = phase particle
 
     model substates = pictures $ bg : map transition substates
